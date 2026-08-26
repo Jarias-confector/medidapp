@@ -26,7 +26,17 @@
       "bundleIdentifier": "com.tuusuario.macros"
     },
     "android": {
-      "package": "com.tuusuario.macros"
+      "package": "com.tuusuario.macros",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "876aa59f-77d4-455f-bd8f-e625c9a30ec1"
+      }
     }
   }
 }

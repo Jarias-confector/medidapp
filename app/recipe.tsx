@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, FlatList, ActivityIndicator, Modal } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { cacheFood, searchCache } from '../lib/db';
 import { searchUSDA } from '../lib/usda';
 import { searchOFF } from '../lib/off';
@@ -13,6 +13,7 @@ type Ingredient = {
 };
 
 export default function Recipe() {
+  const { date } = useLocalSearchParams<{ date?: string }>();
   const [name, setName] = useState('');
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
   const [showSearch, setShowSearch] = useState(false);
@@ -100,7 +101,7 @@ export default function Recipe() {
 
       const saved = await cacheFood(normalizedFood);
       // Redirigir a pantalla final de porción para que lo agregue directamente si gusta
-      router.replace({ pathname: '/add', params: { food: JSON.stringify(saved) } });
+      router.replace({ pathname: '/add', params: { food: JSON.stringify(saved), date } });
     } catch (e: any) {
       setMsg(e?.message ?? 'No se pudo guardar la receta.');
     } finally {

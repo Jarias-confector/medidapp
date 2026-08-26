@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { searchCache, cacheFood } from '../lib/db';
 import { searchUSDA } from '../lib/usda';
 import { searchOFF } from '../lib/off';
@@ -8,6 +8,7 @@ import type { Food } from '../lib/types';
 import { T } from '../lib/theme';
 
 export default function Search() {
+  const { date } = useLocalSearchParams<{ date?: string }>();
   const [q, setQ] = useState('');
   const [results, setResults] = useState<Food[]>([]);
   const [busy, setBusy] = useState(false);
@@ -56,7 +57,7 @@ export default function Search() {
 
   async function choose(f: Food) {
     const saved = f.id ? f : await cacheFood(f); // cachea al usarlo, nunca dos veces
-    router.push({ pathname: '/add', params: { food: JSON.stringify(saved) } });
+    router.push({ pathname: '/add', params: { food: JSON.stringify(saved), date } });
   }
 
   return (
@@ -73,8 +74,10 @@ export default function Search() {
       />
       
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
-        {!!err ? <Text style={s.err}>{err}</Text> : <View />}
-        <Pressable onPress={() => router.push('/custom')}>
+        <Pressable onPress={() => router.push({ pathname: '/scan', params: { date } })}>
+          <Text style={{ color: T.prot, fontWeight: '600', fontSize: 14 }}>📷 Escanear barras</Text>
+        </Pressable>
+        <Pressable onPress={() => router.push({ pathname: '/custom', params: { date } })}>
           <Text style={{ color: T.prot, fontWeight: '600', fontSize: 14 }}>✍️ Crear personalizado</Text>
         </Pressable>
       </View>

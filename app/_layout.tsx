@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { supabase } from '../lib/db';
+import { supabase, syncOfflineQueue } from '../lib/db';
 import { T } from '../lib/theme';
 import type { Session } from '@supabase/supabase-js';
 
@@ -20,8 +20,12 @@ export default function Layout() {
         setSession(data.session);
       }
       setReady(true);
+      syncOfflineQueue();
     });
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s);
+      if (s) syncOfflineQueue();
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -43,6 +47,7 @@ export default function Layout() {
         <Stack.Screen name="goals" options={{ title: 'Metas diarias', presentation: 'modal' }} />
         <Stack.Screen name="custom" options={{ title: 'Crear alimento', presentation: 'modal' }} />
         <Stack.Screen name="recipe" options={{ title: 'Crear menú/receta', presentation: 'modal' }} />
+        <Stack.Screen name="history" options={{ title: 'Historial Semanal' }} />
         <Stack.Screen name="add" options={{ title: 'Agregar', presentation: 'modal' }} />
       </Stack>
     </>

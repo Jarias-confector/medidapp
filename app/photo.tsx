@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase, searchCache, cacheFood, addEntry } from '../lib/db';
 import { searchUSDA } from '../lib/usda';
 import type { Food } from '../lib/types';
@@ -11,6 +11,7 @@ import { T } from '../lib/theme';
 type Item = { nombre: string; gramos: number; confianza: number };
 
 export default function Photo() {
+  const { date } = useLocalSearchParams<{ date?: string }>();
   const [items, setItems] = useState<Item[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -62,7 +63,7 @@ export default function Photo() {
         if (!remote.length) continue;       // sin match confiable, se omite
         food = await cacheFood(remote[0]);
       }
-      await addEntry(food.id!, it.gramos, 'comida');
+      await addEntry(food.id!, it.gramos, 'comida', date);
     }
     setBusy(false);
     router.replace('/');

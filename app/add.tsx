@@ -8,7 +8,7 @@ import { T } from '../lib/theme';
 const MEALS: Meal[] = ['desayuno', 'comida', 'cena', 'snack'];
 
 export default function Add() {
-  const { food: raw } = useLocalSearchParams<{ food: string }>();
+  const { food: raw, date } = useLocalSearchParams<{ food: string; date?: string }>();
   const food: Food = JSON.parse(raw);
   const [grams, setGrams] = useState(String(food.serving_g ?? 100));
   const [meal, setMeal] = useState<Meal>('comida');
@@ -44,7 +44,7 @@ export default function Add() {
       <Pressable
         style={s.btn}
         disabled={!Number(grams)}
-        onPress={async () => { await addEntry(food.id!, Number(grams), meal); router.dismissAll(); router.replace('/'); }}
+        onPress={async () => { await addEntry(food.id!, Number(grams), meal, date); router.dismissAll(); router.replace('/'); }}
       >
         <Text style={s.btnText}>Agregar a {meal}</Text>
       </Pressable>

@@ -8,6 +8,7 @@ import { T } from '../lib/theme';
 const today = () => new Date().toISOString().slice(0, 10);
 
 export default function Today() {
+  const [selectedDate, setSelectedDate] = useState(today());
   const [entries, setEntries] = useState<Entry[]>([]);
   const [goals, setGoals] = useState<Macros>({ kcal: 2000, protein: 150, carbs: 200, fat: 65 });
   const [loading, setLoading] = useState(false);
@@ -15,16 +16,48 @@ export default function Today() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [e, g] = await Promise.all([dayEntries(today()), getGoals()]);
+    const [e, g] = await Promise.all([dayEntries(selectedDate), getGoals()]);
     setEntries(e); setGoals(g); setLoading(false);
-  }, []);
+  }, [selectedDate]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const total = sumMacros(entries);
 
+  function changeDate(days: number) {
+    const d = new Date(selectedDate + 'T12:00:00');
+    d.setDate(d.getDate() + days);
+    setSelectedDate(d.toISOString().slice(0, 10));
+  }
+
+  function formatDateLabel(dateStr: string) {
+    const t = today();
+    if (dateStr === t) return 'Hoy';
+    
+    const d = new Date(t + 'T12:00:00');
+    d.setDate(d.getDate() - 1);
+    const y = d.toISOString().slice(0, 10);
+    if (dateStr === y) return 'Ayer';
+
+    const parts = dateStr.split('-');
+    const dateObj = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    return `${dateObj.getDate()} de ${months[dateObj.getMonth()]}`;
+  }
+
   return (
     <View style={s.wrap}>
+      {/* Selector de Fecha */}
+      <View style={s.dateSelector}>
+        <Pressable style={s.dateArrow} onPress={() => changeDate(-1)}>
+          <Text style={s.arrowText}>◀</Text>
+        </Pressable>
+        <Text style={s.dateLabel}>{formatDateLabel(selectedDate)}</Text>
+        <Pressable style={s.dateArrow} onPress={() => changeDate(1)}>
+          <Text style={s.arrowText}>▶</Text>
+        </Pressable>
+      </View>
+
       <Pressable style={s.card} onPress={() => router.push('/goals')}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={s.kcal}>{Math.round(total.kcal)}</Text>
@@ -39,10 +72,10 @@ export default function Today() {
       </Pressable>
 
       <View style={s.actions}>
-        <Action icon="🔍" label="Buscar" onPress={() => router.push('/search')} />
-        <Action icon="📷" label="Foto"   onPress={() => router.push('/photo')} />
-        <Action icon="🍳" label="Crear Menú" onPress={() => router.push('/recipe')} />
-        <Action icon="▮▯" label="Código" onPress={() => router.push('/scan')} />
+        <Action icon="🔍" label="Buscar" onPress={() => router.push({ pathname: '/search', params: { date: selectedDate } })} />
+        <Action icon="📷" label="Foto"   onPress={() => router.push({ pathname: '/photo', params: { date: selectedDate } })} />
+        <Action icon="🍳" label="Menú"   onPress={() => router.push({ pathname: '/recipe', params: { date: selectedDate } })} />
+        <Action icon="📊" label="Historial" onPress={() => router.push('/history')} />
       </View>
 
       <FlatList
@@ -57,7 +90,7 @@ export default function Today() {
           return (
             <Pressable
               style={s.row}
-              onLongPress={async () => { await deleteEntry(item.id); load(); }}
+              onLongPress={async () => { await deleteEntry(item.id, selectedDate); load(); }}
             >
               <View style={{ flex: 1 }}>
                 <Text style={s.rowName} numberOfLines={1}>{f.name}</Text>
@@ -98,6 +131,10 @@ function Action({ icon, label, onPress }: { icon: string; label: string; onPress
 
 const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: T.bg, padding: 16, gap: 14 },
+  dateSelector: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: T.surface, borderRadius: T.r, paddingVertical: 10, paddingHorizontal: 16, borderWidth: 1, borderColor: T.line },
+  dateArrow: { padding: 6 },
+  arrowText: { color: T.prot, fontSize: 16, fontWeight: '700' },
+  dateLabel: { color: T.text, fontSize: 16, fontWeight: '700' },
   card: { backgroundColor: T.surface, borderRadius: 20, padding: 20, borderWidth: 1, borderColor: T.line },
   kcal: { color: T.text, fontSize: 52, fontWeight: '800', letterSpacing: -2 },
   kcalSub: { color: T.dim, fontSize: 13, marginBottom: 20 },
