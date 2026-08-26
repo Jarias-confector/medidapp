@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Macros",
+    "slug": "macros-mx",
+    "scheme": "macros",
+    "version": "1.0.0",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      "expo-router",
+      ["expo-camera", { "cameraPermission": "Para escanear códigos de barras y fotografiar tus platos." }],
+      ["expo-image-picker", { "photosPermission": "Para analizar fotos de tus comidas." }]
+    ],
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.tuusuario.macros" },
+    "android": { "package": "com.tuusuario.macros" }
+  }
+}

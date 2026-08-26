@@ -1,0 +1,90 @@
+import { useState } from 'react';
+import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
+import { searchCache, cacheFood } from '../lib/db';
+import { searchUSDA } from '../lib/usda';
+import type { Food } from '../lib/types';
+import { T } from '../lib/theme';
+
+export default function Search() {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState<Food[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const router = useRouter();
+
+  async function run() {
+    if (q.trim().length < 2) return;
+    setBusy(true); setErr('');
+    try {
+      // 1. cache local (gratis, instantáneo)
+      const local = await searchCache(q);
+      setResults(local);
+      // 2. solo pega a USDA si el cache no alcanza
+      if (local.length < 5) {
+        const remote = await searchUSDA(q);
+        const seen = new Set(local.map((f) => `${f.source}:${f.source_id}`));
+        setResults([...local, ...remote.filter((f) => !seen.has(`${f.source}:${f.source_id}`))]);
+      }
+    } catch {
+      setErr('No se pudo buscar en línea. Se muestran solo resultados guardados.');
+    }
+    setBusy(false);
+  }
+
+  async function choose(f: Food) {
+    const saved = f.id ? f : await cacheFood(f); // cachea al usarlo, nunca dos veces
+    router.push({ pathname: '/add', params: { food: JSON.stringify(saved) } });
+  }
+
+  return (
+    <View style={s.wrap}>
+      <TextInput
+        style={s.input}
+        placeholder="pollo, tortilla, avena…"
+        placeholderTextColor={T.dim}
+        value={q}
+        onChangeText={setQ}
+        onSubmitEditing={run}
+        returnKeyType="search"
+        autoFocus
+      />
+      {busy && <ActivityIndicator color={T.prot} style={{ marginTop: 20 }} />}
+      {!!err && <Text style={s.err}>{err}</Text>}
+
+      <FlatList
+        data={results}
+        keyExtractor={(f, i) => `${f.source}:${f.source_id}:${i}`}
+        keyboardShouldPersistTaps="handled"
+        renderItem={({ item }) => (
+          <Pressable style={s.row} onPress={() => choose(item)}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.name} numberOfLines={2}>{item.name}</Text>
+              <Text style={s.meta}>
+                {item.brand ? `${item.brand} · ` : ''}
+                {Math.round(item.kcal)} kcal · P {item.protein.toFixed(1)} · C {item.carbs.toFixed(1)} · G {item.fat.toFixed(1)} /100g
+              </Text>
+            </View>
+            <Text style={s.tag}>{item.source}</Text>
+          </Pressable>
+        )}
+      />
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  wrap: { flex: 1, backgroundColor: T.bg, padding: 16 },
+  input: {
+    backgroundColor: T.surface, borderRadius: T.r, padding: 15, color: T.text,
+    fontSize: 16, borderWidth: 1, borderColor: T.line,
+  },
+  err: { color: T.carb, fontSize: 12, marginTop: 10 },
+  row: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.line,
+  },
+  name: { color: T.text, fontSize: 15, fontWeight: '600' },
+  meta: { color: T.dim, fontSize: 12, marginTop: 3 },
+  tag: { color: T.dim, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+});
