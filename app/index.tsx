@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, RefreshControl } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { dayEntries, sumMacros, getGoals, deleteEntry } from '../lib/db';
 import type { Entry, Macros } from '../lib/types';
 import { T } from '../lib/theme';
+import Animated, { useSharedValue, useAnimatedStyle, withTiming, FadeInDown, FadeOutUp, Layout } from 'react-native-reanimated';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -85,21 +86,27 @@ export default function Today() {
         ListEmptyComponent={
           <Text style={s.empty}>Nada registrado hoy. Empieza con Buscar o Foto.</Text>
         }
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const f = item.foods!, k = item.grams / 100;
           return (
-            <Pressable
-              style={s.row}
-              onLongPress={async () => { await deleteEntry(item.id, selectedDate); load(); }}
+            <Animated.View
+              entering={FadeInDown.delay(index * 30).duration(300)}
+              exiting={FadeOutUp.duration(200)}
+              layout={Layout.springify()}
             >
-              <View style={{ flex: 1 }}>
-                <Text style={s.rowName} numberOfLines={1}>{f.name}</Text>
-                <Text style={s.rowMeta}>
-                  {item.grams} g · {item.meal} · P {Math.round(f.protein * k)} C {Math.round(f.carbs * k)} G {Math.round(f.fat * k)}
-                </Text>
-              </View>
-              <Text style={s.rowKcal}>{Math.round(f.kcal * k)}</Text>
-            </Pressable>
+              <Pressable
+                style={s.row}
+                onLongPress={async () => { await deleteEntry(item.id, selectedDate); load(); }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={s.rowName} numberOfLines={1}>{f.name}</Text>
+                  <Text style={s.rowMeta}>
+                    {item.grams} g · {item.meal} · P {Math.round(f.protein * k)} C {Math.round(f.carbs * k)} G {Math.round(f.fat * k)}
+                  </Text>
+                </View>
+                <Text style={s.rowKcal}>{Math.round(f.kcal * k)}</Text>
+              </Pressable>
+            </Animated.View>
           );
         }}
       />
@@ -109,11 +116,21 @@ export default function Today() {
 
 function Bar({ label, v, goal, color }: { label: string; v: number; goal: number; color: string }) {
   const pct = Math.min(100, (v / goal) * 100);
+  const widthVal = useSharedValue(0);
+
+  useEffect(() => {
+    widthVal.value = withTiming(pct, { duration: 600 });
+  }, [pct]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    width: `${widthVal.value}%`,
+  }));
+
   return (
     <View style={{ flex: 1, gap: 6 }}>
       <Text style={s.barLabel}>{label}</Text>
       <View style={s.barTrack}>
-        <View style={[s.barFill, { width: `${pct}%`, backgroundColor: color }]} />
+        <Animated.View style={[s.barFill, animStyle, { backgroundColor: color }]} />
       </View>
       <Text style={s.barVal}>{Math.round(v)}<Text style={{ color: T.dim }}>/{goal}g</Text></Text>
     </View>
