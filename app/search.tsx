@@ -20,11 +20,44 @@ export default function Search() {
     if (q.trim().length < 2) return;
     setBusy(true); setErr('');
     try {
-      // 1. Alimentos básicos locales (instantáneos y sin key)
-      const basics = searchBasics(q);
+      let queryToSearch = q;
+      let basics = searchBasics(queryToSearch);
+
+      // Si no hay coincidencias locales inmediatas, intentamos corregir la ortografía con Gemini
+      if (basics.length === 0) {
+        const geminiKey = process.env.EXPO_PUBLIC_GEMINI_KEY;
+        if (geminiKey) {
+          try {
+            const MODEL = 'gemini-1.5-flash';
+            const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${geminiKey}`;
+            const PROMPT = `Corrige la ortografía o deduce el alimento en español a partir de esta búsqueda con errores. Responde únicamente con el alimento corregido (máximo 3 palabras), sin explicaciones, sin markdown, en minúsculas. Ejemplo: 'huevi' -> 'huevo', 'avenaa' -> 'avena'. Consulta: '${queryToSearch}'`;
+            
+            const res = await fetch(ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: PROMPT }] }],
+                generationConfig: { temperature: 0.1 },
+              }),
+            });
+            
+            if (res.ok) {
+              const resJson = await res.json();
+              const corrected = resJson.candidates?.[0]?.content?.parts?.[0]?.text?.trim()?.toLowerCase();
+              if (corrected && corrected !== queryToSearch && corrected.length >= 2) {
+                console.log(`Query corregido: '${queryToSearch}' -> '${corrected}'`);
+                queryToSearch = corrected;
+                basics = searchBasics(queryToSearch);
+              }
+            }
+          } catch (err) {
+            console.warn('Gemini query correction failed:', err);
+          }
+        }
+      }
 
       // 2. cache local (gratis, instantáneo)
-      const local = await searchCache(q);
+      const local = await searchCache(queryToSearch);
 
       // Combinar básicos y locales únicos
       const initialResults = [...basics];
@@ -42,14 +75,14 @@ export default function Search() {
       let remote: Food[] = [];
       
       try {
-        const usdaResults = await searchUSDA(q);
+        const usdaResults = await searchUSDA(queryToSearch);
         remote = [...remote, ...usdaResults];
       } catch (e) {
         console.warn('USDA search error:', e);
       }
 
       try {
-        const offResults = await searchOFF(q);
+        const offResults = await searchOFF(queryToSearch);
         remote = [...remote, ...offResults];
       } catch (e) {
         console.warn('OFF search error:', e);
