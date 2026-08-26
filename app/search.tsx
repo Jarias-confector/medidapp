@@ -3,6 +3,7 @@ import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ActivityIndicat
 import { useRouter } from 'expo-router';
 import { searchCache, cacheFood } from '../lib/db';
 import { searchUSDA } from '../lib/usda';
+import { searchOFF } from '../lib/off';
 import type { Food } from '../lib/types';
 import { T } from '../lib/theme';
 
@@ -20,12 +21,33 @@ export default function Search() {
       // 1. cache local (gratis, instantáneo)
       const local = await searchCache(q);
       setResults(local);
-      // 2. solo pega a USDA si el cache no alcanza
-      if (local.length < 5) {
-        const remote = await searchUSDA(q);
-        const seen = new Set(local.map((f) => `${f.source}:${f.source_id}`));
-        setResults([...local, ...remote.filter((f) => !seen.has(`${f.source}:${f.source_id}`))]);
+      
+      // 2. pegamos a las APIs externas
+      let remote: Food[] = [];
+      
+      try {
+        const usdaResults = await searchUSDA(q);
+        remote = [...remote, ...usdaResults];
+      } catch (e) {
+        console.warn('USDA search error:', e);
       }
+
+      try {
+        const offResults = await searchOFF(q);
+        remote = [...remote, ...offResults];
+      } catch (e) {
+        console.warn('OFF search error:', e);
+      }
+
+      const seen = new Set(local.map((f) => `${f.source}:${f.source_id}`));
+      const uniqueRemote = remote.filter((f) => {
+        const key = `${f.source}:${f.source_id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      setResults([...local, ...uniqueRemote]);
     } catch {
       setErr('No se pudo buscar en línea. Se muestran solo resultados guardados.');
     }

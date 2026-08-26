@@ -96,3 +96,15 @@ export async function getGoals(): Promise<Macros> {
   const { data } = await supabase.from('goals').select('*').maybeSingle();
   return data ?? { kcal: 2000, protein: 150, carbs: 200, fat: 65 };
 }
+
+export async function saveGoals(goals: Macros) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase.from('goals').upsert({
+    user_id: user!.id,
+    kcal: goals.kcal,
+    protein: goals.protein,
+    carbs: goals.carbs,
+    fat: goals.fat,
+  });
+  if (error) throw error;
+}

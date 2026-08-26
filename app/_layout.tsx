@@ -40,6 +40,7 @@ export default function Layout() {
         <Stack.Screen name="search" options={{ title: 'Buscar alimento' }} />
         <Stack.Screen name="scan" options={{ title: 'Escanear código' }} />
         <Stack.Screen name="photo" options={{ title: 'Foto del plato' }} />
+        <Stack.Screen name="goals" options={{ title: 'Metas diarias', presentation: 'modal' }} />
         <Stack.Screen name="add" options={{ title: 'Agregar', presentation: 'modal' }} />
       </Stack>
     </>

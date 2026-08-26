@@ -25,15 +25,18 @@ export default function Today() {
 
   return (
     <View style={s.wrap}>
-      <View style={s.card}>
-        <Text style={s.kcal}>{Math.round(total.kcal)}</Text>
+      <Pressable style={s.card} onPress={() => router.push('/goals')}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={s.kcal}>{Math.round(total.kcal)}</Text>
+          <Text style={{ color: T.dim, fontSize: 18 }}>⚙️ Editar</Text>
+        </View>
         <Text style={s.kcalSub}>de {goals.kcal} kcal · quedan {Math.max(0, Math.round(goals.kcal - total.kcal))}</Text>
         <View style={s.bars}>
           <Bar label="Proteína" v={total.protein} goal={goals.protein} color={T.prot} />
           <Bar label="Carbos"   v={total.carbs}   goal={goals.carbs}   color={T.carb} />
           <Bar label="Grasa"    v={total.fat}     goal={goals.fat}     color={T.fat} />
         </View>
-      </View>
+      </Pressable>
 
       <View style={s.actions}>
         <Action icon="🔍" label="Buscar" onPress={() => router.push('/search')} />
