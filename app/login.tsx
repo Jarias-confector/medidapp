@@ -1,18 +1,35 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { supabase } from '../lib/db';
+import * as Linking from 'expo-linking';
+import { sendMagicLink, completeSignInFromUrl, authRedirectUrl } from '../lib/auth';
 import { T } from '../lib/theme';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
+  const url = Linking.useURL();
+  const handled = useRef<string | null>(null);
+
+  // El enlace del correo regresa a esta pantalla con ?code=...
+  useEffect(() => {
+    if (!url || handled.current === url) return;
+    handled.current = url;
+    setBusy(true);
+    completeSignInFromUrl(url)
+      .then((err) => { if (err) setMsg(err); })
+      .finally(() => setBusy(false));
+  }, [url]);
 
   async function send() {
     setBusy(true);
-    const { error } = await supabase.auth.signInWithOtp({ email: email.trim() });
+    try {
+      await sendMagicLink(email);
+      setMsg('Revisa tu correo y abre el enlace para entrar.');
+    } catch (e: any) {
+      setMsg(e?.message ?? 'No se pudo enviar el enlace. Intenta de nuevo.');
+    }
     setBusy(false);
-    setMsg(error ? error.message : 'Revisa tu correo y abre el enlace para entrar.');
   }
 
   return (
@@ -33,6 +50,11 @@ export default function Login() {
         <Text style={s.btnText}>{busy ? 'Enviando…' : 'Enviar enlace'}</Text>
       </Pressable>
       {!!msg && <Text style={s.msg}>{msg}</Text>}
+      {__DEV__ && (
+        <Text style={s.debug}>
+          El enlace regresa a {authRedirectUrl()}. Esa url debe estar en los redirect urls del proyecto.
+        </Text>
+      )}
     </View>
   );
 }
@@ -48,4 +70,5 @@ const s = StyleSheet.create({
   btn: { backgroundColor: T.prot, borderRadius: T.r, padding: 16, alignItems: 'center' },
   btnText: { color: T.bg, fontWeight: '700', fontSize: 16 },
   msg: { color: T.dim, fontSize: 13, textAlign: 'center', marginTop: 8 },
+  debug: { color: T.dim, fontSize: 11, textAlign: 'center', marginTop: 20, opacity: 0.7 },
 });

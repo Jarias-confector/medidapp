@@ -6,7 +6,17 @@ import type { Food, Entry, Macros, Meal } from './types';
 export const supabase = createClient(
   process.env.EXPO_PUBLIC_SUPABASE_URL!,
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
-  { auth: { storage: AsyncStorage, persistSession: true, detectSessionInUrl: false } }
+  {
+    auth: {
+      storage: AsyncStorage,
+      persistSession: true,
+      autoRefreshToken: true,
+      // En nativo no hay URL que leer: el deep link se procesa a mano en _layout.
+      detectSessionInUrl: false,
+      // PKCE devuelve ?code=... como query param, fácil de sacar del deep link.
+      flowType: 'pkce',
+    },
+  }
 );
 
 /** Guarda un Food externo en cache y devuelve el row con id. Idempotente. */
