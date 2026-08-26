@@ -7,10 +7,26 @@
     "userInterfaceStyle": "dark",
     "plugins": [
       "expo-router",
-      ["expo-camera", { "cameraPermission": "Para escanear códigos de barras y fotografiar tus platos." }],
-      ["expo-image-picker", { "photosPermission": "Para analizar fotos de tus comidas." }]
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Para escanear códigos de barras y fotografiar tus platos."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Para analizar fotos de tus comidas."
+        }
+      ],
+      "expo-asset"
     ],
-    "ios": { "supportsTablet": true, "bundleIdentifier": "com.tuusuario.macros" },
-    "android": { "package": "com.tuusuario.macros" }
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tuusuario.macros"
+    },
+    "android": {
+      "package": "com.tuusuario.macros"
+    }
   }
 }
