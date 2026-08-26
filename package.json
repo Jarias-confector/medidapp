@@ -11,6 +11,7 @@
     "@react-native-async-storage/async-storage": "2.1.2",
     "@supabase/supabase-js": "^2.45.0",
     "expo": "~52.0.0",
+    "expo-asset": "^57.0.14",
     "expo-camera": "~16.0.0",
     "expo-image-manipulator": "~13.0.0",
     "expo-image-picker": "~16.0.0",
@@ -22,5 +23,8 @@
     "react-native-screens": "~4.1.0",
     "react-native-url-polyfill": "^2.0.0"
   },
-  "devDependencies": { "typescript": "~5.3.3", "@types/react": "~18.3.12" }
+  "devDependencies": {
+    "@types/react": "~18.3.12",
+    "typescript": "~5.3.3"
+  }
 }
