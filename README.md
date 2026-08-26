@@ -7,7 +7,7 @@ Contador de macros gratis. Expo + Supabase + APIs abiertas.
 ```bash
 npx create-expo-app@latest . --template blank-typescript   # solo si empiezas de cero
 npm install
-cp .env.example .env    # llena las 3 llaves
+cp .env.example .env    # llena las 2 llaves de Supabase
 npx expo start
 ```
 
@@ -16,7 +16,7 @@ npx expo start
 | Qué | Dónde | Costo |
 |---|---|---|
 | Supabase URL + anon key | supabase.com → Project Settings → API | Free tier |
-| USDA | api.data.gov/signup | Gratis, 1000 req/hora |
+| USDA | api.data.gov/signup | Gratis, 1000 req/hora (secret en Supabase) |
 | Gemini | aistudio.google.com/apikey | Free tier, ~15 RPM / 1500 RPD |
 | Open Food Facts | — | Sin key |
 
@@ -24,11 +24,14 @@ npx expo start
 
 Pega `supabase/schema.sql` en el SQL Editor de Supabase y ejecútalo.
 
-## Edge function
+## Edge functions
+
+Las API keys de USDA y Gemini viven aquí, nunca en el cliente.
 
 ```bash
 supabase functions deploy analyze-photo
-supabase secrets set GEMINI_KEY=tu_key
+supabase functions deploy search-food
+supabase secrets set GEMINI_KEY=tu_key USDA_KEY=tu_key
 ```
 
 **Importante:** usa un proyecto de Google Cloud aparte para producción. Activar
