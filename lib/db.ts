@@ -211,6 +211,38 @@ export async function deleteEntry(id: string, date: string) {
     }
   }
 }
+export async function deleteCustomFood(id: string) {
+  try {
+    const { error } = await supabase.from('foods').delete().eq('id', id);
+    if (error) {
+      console.warn('Could not delete food from remote DB (might be in use):', error.message);
+    }
+  } catch (err) {
+    console.warn('Failed to delete food from remote DB:', err);
+  }
+
+  await AsyncStorage.removeItem(`food:${id}`);
+
+  try {
+    const customStr = await AsyncStorage.getItem('custom_foods_list');
+    if (customStr) {
+      const customList: Food[] = JSON.parse(customStr);
+      const filtered = customList.filter((f) => f.id !== id);
+      await AsyncStorage.setItem('custom_foods_list', JSON.stringify(filtered));
+    }
+  } catch (err) {
+    console.warn('Failed to remove custom food from list:', err);
+  }
+
+  try {
+    const queueStr = await AsyncStorage.getItem('offline_foods_queue');
+    if (queueStr) {
+      const queue: Food[] = JSON.parse(queueStr);
+      const filtered = queue.filter((f) => f.id !== id);
+      await AsyncStorage.setItem('offline_foods_queue', JSON.stringify(filtered));
+    }
+  } catch {}
+}
 
 export async function dayEntries(date: string): Promise<Entry[]> {
   const cacheKey = `entries:${date}`;

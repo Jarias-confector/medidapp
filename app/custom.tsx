@@ -1,22 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { cacheFood } from '../lib/db';
 import { T } from '../lib/theme';
+import type { Food } from '../lib/types';
 
 export default function CustomFood() {
-  const [name, setName] = useState('');
-  const [brand, setBrand] = useState('');
-  const [kcal, setKcal] = useState('');
-  const [protein, setProtein] = useState('');
-  const [carbs, setCarbs] = useState('');
-  const [fat, setFat] = useState('');
-  const [servingG, setServingG] = useState('100');
+  const { food: editRaw } = useLocalSearchParams<{ food?: string }>();
+  const editFood: Food | null = editRaw ? JSON.parse(editRaw) : null;
+
+  const [name, setName] = useState(editFood?.name ?? '');
+  const [brand, setBrand] = useState(editFood?.brand ?? '');
+  const [kcal, setKcal] = useState(editFood ? String(editFood.kcal) : '');
+  const [protein, setProtein] = useState(editFood ? String(editFood.protein) : '');
+  const [carbs, setCarbs] = useState(editFood ? String(editFood.carbs) : '');
+  const [fat, setFat] = useState(editFood ? String(editFood.fat) : '');
+  const [servingG, setServingG] = useState(editFood ? String(editFood.serving_g) : '100');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const router = useRouter();
 
-  // Calcular calorías teóricas (4/4/9) para ayudar al usuario
   const calculatedKcal = (Number(protein) || 0) * 4 + (Number(carbs) || 0) * 4 + (Number(fat) || 0) * 9;
 
   async function save() {
@@ -30,7 +33,7 @@ export default function CustomFood() {
     try {
       const foodItem = {
         source: 'custom' as const,
-        source_id: 'c_' + Math.random().toString(36).substring(2, 11),
+        source_id: editFood?.source_id ?? 'c_' + Math.random().toString(36).substring(2, 11),
         name: name.trim(),
         brand: brand.trim() || null,
         kcal: Number(kcal) || calculatedKcal || 0,
@@ -38,10 +41,10 @@ export default function CustomFood() {
         carbs: Number(carbs) || 0,
         fat: Number(fat) || 0,
         serving_g: Number(servingG) || 100,
+        ...(editFood?.id ? { id: editFood.id } : {}),
       };
 
       const saved = await cacheFood(foodItem);
-      // Reemplazamos esta pantalla por la pantalla de agregar porción
       router.replace({ pathname: '/add', params: { food: JSON.stringify(saved) } });
     } catch (e: any) {
       setMsg(e?.message ?? 'No se pudo guardar el alimento.');

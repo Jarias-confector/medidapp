@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { searchCache, cacheFood } from '../lib/db';
+import { searchCache, cacheFood, deleteCustomFood } from '../lib/db';
 import { searchUSDA } from '../lib/usda';
 import { searchOFF } from '../lib/off';
 import { searchBasics } from '../lib/basics';
@@ -113,16 +113,31 @@ export default function Search() {
           ) : null
         }
         renderItem={({ item }) => (
-          <Pressable style={s.row} onPress={() => choose(item)}>
-            <View style={{ flex: 1 }}>
+          <View style={s.row}>
+            <Pressable style={{ flex: 1 }} onPress={() => choose(item)}>
               <Text style={s.name} numberOfLines={2}>{item.name}</Text>
               <Text style={s.meta}>
                 {item.brand ? `${item.brand} · ` : ''}
                 {Math.round(item.kcal)} kcal · P {item.protein.toFixed(1)} · C {item.carbs.toFixed(1)} · G {item.fat.toFixed(1)} /100g
               </Text>
-            </View>
-            <Text style={s.tag}>{item.source}</Text>
-          </Pressable>
+            </Pressable>
+            
+            {item.source === 'custom' ? (
+              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center', paddingLeft: 8 }}>
+                <Pressable onPress={() => router.push({ pathname: '/custom', params: { food: JSON.stringify(item) } })}>
+                  <Text style={{ fontSize: 16 }}>✏️</Text>
+                </Pressable>
+                <Pressable onPress={async () => {
+                  await deleteCustomFood(item.id!);
+                  run();
+                }}>
+                  <Text style={{ fontSize: 16 }}>🗑️</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Text style={s.tag}>{item.source}</Text>
+            )}
+          </View>
         )}
       />
     </View>
