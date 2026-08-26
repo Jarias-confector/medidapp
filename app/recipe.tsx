@@ -23,6 +23,7 @@ export default function Recipe() {
   const [busySearch, setBusySearch] = useState(false);
   const [selectedFood, setSelectedFood] = useState<Food | null>(null);
   const [gramsInput, setGramsInput] = useState('100');
+  const [ingredientUnit, setIngredientUnit] = useState<'g' | 'pza'>('g');
   const [busySave, setBusySave] = useState(false);
   const [msg, setMsg] = useState('');
   const router = useRouter();
@@ -84,9 +85,10 @@ export default function Recipe() {
 
   function addIngredient() {
     if (!selectedFood || !Number(gramsInput)) return;
+    const finalGrams = ingredientUnit === 'pza' ? Number(gramsInput) * (selectedFood.serving_g || 1) : Number(gramsInput);
     setIngredients([
       ...ingredients,
-      { food: selectedFood, grams: Number(gramsInput) },
+      { food: selectedFood, grams: finalGrams },
     ]);
     setSelectedFood(null);
     setResults([]);
@@ -234,12 +236,16 @@ export default function Recipe() {
                 keyExtractor={(f, i) => `${f.source}:${f.source_id}:${i}`}
                 style={{ marginTop: 10 }}
                 renderItem={({ item }) => (
-                  <Pressable style={s.row} onPress={() => { setSelectedFood(item); setGramsInput(String(item.serving_g || 100)); }}>
+                  <Pressable style={s.row} onPress={() => {
+                    setSelectedFood(item);
+                    setIngredientUnit(item.serving_g ? 'pza' : 'g');
+                    setGramsInput(item.serving_g ? '1' : '100');
+                  }}>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.name} numberOfLines={1}>{item.name}</Text>
-                      <Text style={s.meta}>
-                        {Math.round(item.kcal)} kcal · P {item.protein.toFixed(1)} · C {item.carbs.toFixed(1)} · G {item.fat.toFixed(1)}
-                      </Text>
+                       <Text style={s.name} numberOfLines={1}>{item.name}</Text>
+                       <Text style={s.meta}>
+                         {Math.round(item.kcal)} kcal · P {item.protein.toFixed(1)} · C {item.carbs.toFixed(1)} · G {item.fat.toFixed(1)}
+                       </Text>
                     </View>
                     <Text style={s.tag}>{item.source}</Text>
                   </Pressable>
@@ -249,6 +255,25 @@ export default function Recipe() {
           ) : (
             <View style={{ padding: 20, gap: 16 }}>
               <Text style={s.modalSub}>{selectedFood.name}</Text>
+
+              {/* Selector de Unidad */}
+              {!!selectedFood.serving_g && (
+                <View style={s.unitTabs}>
+                  <Pressable
+                    style={[s.unitTab, ingredientUnit === 'pza' && s.unitTabOn]}
+                    onPress={() => { setIngredientUnit('pza'); setGramsInput('1'); }}
+                  >
+                    <Text style={[s.unitTabText, ingredientUnit === 'pza' && { color: T.bg }]}>Piezas ({selectedFood.serving_g}g)</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[s.unitTab, ingredientUnit === 'g' && s.unitTabOn]}
+                    onPress={() => { setIngredientUnit('g'); setGramsInput(String(selectedFood.serving_g || 100)); }}
+                  >
+                    <Text style={[s.unitTabText, ingredientUnit === 'g' && { color: T.bg }]}>Gramos (g)</Text>
+                  </Pressable>
+                </View>
+              )}
+
               <View style={s.gramRow}>
                 <TextInput
                   style={s.grams}
@@ -257,9 +282,16 @@ export default function Recipe() {
                   onChangeText={setGramsInput}
                   autoFocus
                 />
-                <Text style={s.unit}>gramos</Text>
+                <Text style={s.unit}>{ingredientUnit === 'pza' ? 'pieza(s)' : 'gramos'}</Text>
               </View>
-              <Pressable style={s.btn} onPress={addIngredient}>
+
+              {ingredientUnit === 'pza' && (
+                <Text style={{ color: T.dim, fontSize: 14, marginTop: -8 }}>
+                  Equivale a: <Text style={{ fontWeight: '700', color: T.text }}>{Math.round(Number(gramsInput) * (selectedFood.serving_g || 1))} g</Text>
+                </Text>
+              )}
+
+              <Pressable style={s.btn} onPress={addIngredient} disabled={!Number(gramsInput)}>
                 <Text style={s.btnText}>Agregar ingrediente</Text>
               </Pressable>
               <Pressable style={s.btnAlt} onPress={() => setSelectedFood(null)}>
@@ -316,4 +348,8 @@ const s = StyleSheet.create({
   gramRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   grams: { backgroundColor: T.surface, borderRadius: T.r, paddingHorizontal: 16, paddingVertical: 12, color: T.text, fontSize: 24, fontWeight: '700', minWidth: 100, borderWidth: 1, borderColor: T.line },
   unit: { color: T.dim, fontSize: 14 },
+  unitTabs: { flexDirection: 'row', backgroundColor: T.surface, borderRadius: 10, padding: 4, borderWidth: 1, borderColor: T.line },
+  unitTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  unitTabOn: { backgroundColor: T.prot },
+  unitTabText: { color: T.dim, fontSize: 13, fontWeight: '600' },
 });

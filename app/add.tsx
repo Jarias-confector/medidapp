@@ -10,21 +10,58 @@ const MEALS: Meal[] = ['desayuno', 'comida', 'cena', 'snack'];
 export default function Add() {
   const { food: raw, date } = useLocalSearchParams<{ food: string; date?: string }>();
   const food: Food = JSON.parse(raw);
-  const [grams, setGrams] = useState(String(food.serving_g ?? 100));
+  
+  const [unit, setUnit] = useState<'g' | 'pza'>(food.serving_g ? 'pza' : 'g');
+  const [inputValue, setInputValue] = useState(unit === 'pza' ? '1' : String(food.serving_g ?? 100));
   const [meal, setMeal] = useState<Meal>('comida');
   const router = useRouter();
 
-  const k = (Number(grams) || 0) / 100;
+  const finalGrams = unit === 'pza' ? (Number(inputValue) || 0) * (food.serving_g || 1) : (Number(inputValue) || 0);
+  const k = finalGrams / 100;
 
   return (
     <View style={s.wrap}>
       <Text style={s.name}>{food.name}</Text>
       {!!food.brand && <Text style={s.brand}>{food.brand}</Text>}
 
+      {/* Selector de unidad */}
+      {!!food.serving_g && (
+        <View style={s.unitTabs}>
+          <Pressable
+            style={[s.unitTab, unit === 'pza' && s.unitTabOn]}
+            onPress={() => {
+              setUnit('pza');
+              setInputValue('1');
+            }}
+          >
+            <Text style={[s.unitTabText, unit === 'pza' && { color: T.bg }]}>Piezas ({food.serving_g}g)</Text>
+          </Pressable>
+          <Pressable
+            style={[s.unitTab, unit === 'g' && s.unitTabOn]}
+            onPress={() => {
+              setUnit('g');
+              setInputValue(String(food.serving_g || 100));
+            }}
+          >
+            <Text style={[s.unitTabText, unit === 'g' && { color: T.bg }]}>Gramos (g)</Text>
+          </Pressable>
+        </View>
+      )}
+
       <View style={s.gramRow}>
-        <TextInput style={s.grams} keyboardType="numeric" value={grams} onChangeText={setGrams} autoFocus />
-        <Text style={s.unit}>gramos</Text>
+        <TextInput
+          style={s.grams}
+          keyboardType="numeric"
+          value={inputValue}
+          onChangeText={setInputValue}
+          autoFocus
+        />
+        <Text style={s.unit}>{unit === 'pza' ? 'pieza(s)' : 'gramos'}</Text>
       </View>
+
+      {unit === 'pza' && (
+        <Text style={s.eqLabel}>Equivale a: <Text style={{ fontWeight: '700', color: T.text }}>{Math.round(finalGrams)} g</Text></Text>
+      )}
 
       <View style={s.preview}>
         <Stat v={food.kcal * k} label="kcal" color={T.text} />
@@ -43,8 +80,12 @@ export default function Add() {
 
       <Pressable
         style={s.btn}
-        disabled={!Number(grams)}
-        onPress={async () => { await addEntry(food.id!, Number(grams), meal, date); router.dismissAll(); router.replace('/'); }}
+        disabled={!Number(inputValue)}
+        onPress={async () => {
+          await addEntry(food.id!, Math.round(finalGrams), meal, date);
+          router.dismissAll();
+          router.replace('/');
+        }}
       >
         <Text style={s.btnText}>Agregar a {meal}</Text>
       </Pressable>
@@ -65,9 +106,14 @@ const s = StyleSheet.create({
   wrap: { flex: 1, backgroundColor: T.bg, padding: 20, gap: 16 },
   name: { color: T.text, fontSize: 22, fontWeight: '700', lineHeight: 28 },
   brand: { color: T.dim, fontSize: 13, marginTop: -12 },
+  unitTabs: { flexDirection: 'row', backgroundColor: T.surface, borderRadius: 10, padding: 4, borderWidth: 1, borderColor: T.line },
+  unitTab: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  unitTabOn: { backgroundColor: T.prot },
+  unitTabText: { color: T.dim, fontSize: 13, fontWeight: '600' },
   gramRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10 },
   grams: { backgroundColor: T.surface, borderRadius: T.r, paddingHorizontal: 18, paddingVertical: 14, color: T.text, fontSize: 32, fontWeight: '700', minWidth: 130, borderWidth: 1, borderColor: T.line },
   unit: { color: T.dim, fontSize: 15 },
+  eqLabel: { color: T.dim, fontSize: 14, marginTop: -8 },
   preview: { flexDirection: 'row', backgroundColor: T.surface, borderRadius: T.r, padding: 16, borderWidth: 1, borderColor: T.line },
   statV: { fontSize: 20, fontWeight: '700' },
   statL: { color: T.dim, fontSize: 11, marginTop: 2 },
