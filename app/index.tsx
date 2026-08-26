@@ -40,8 +40,9 @@ export default function Today() {
 
       <View style={s.actions}>
         <Action icon="🔍" label="Buscar" onPress={() => router.push('/search')} />
-        <Action icon="▮▯" label="Código" onPress={() => router.push('/scan')} />
         <Action icon="📷" label="Foto"   onPress={() => router.push('/photo')} />
+        <Action icon="🍳" label="Crear Menú" onPress={() => router.push('/recipe')} />
+        <Action icon="▮▯" label="Código" onPress={() => router.push('/scan')} />
       </View>
 
       <FlatList
