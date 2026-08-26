@@ -377,20 +377,56 @@ const BASIC_FOODS: Food[] = [
   },
 ];
 
+function levenshtein(a: string, b: string): number {
+  const matrix = [];
+  for (let i = 0; i <= a.length; i++) matrix[i] = [i];
+  for (let j = 0; j <= b.length; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,      // Deletion
+        matrix[i][j - 1] + 1,      // Insertion
+        matrix[i - 1][j - 1] + cost // Substitution
+      );
+    }
+  }
+  return matrix[a.length][b.length];
+}
+
+function matchTerm(term: string, targetWords: string[]): boolean {
+  if (term.length < 2) return false;
+  
+  for (const word of targetWords) {
+    if (word.includes(term) || term.includes(word)) return true;
+    if (term.length >= 3) {
+      const dist = levenshtein(term, word);
+      const maxAllowed = term.length > 5 ? 2 : 1;
+      if (dist <= maxAllowed) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Busca alimentos básicos locales que no requieren API keys.
- * Hace coincidencia parcial de palabras clave.
+ * Soporta tolerancia a errores ortográficos menores mediante distancia Levenshtein.
  */
 export function searchBasics(query: string): Food[] {
   const q = query.toLowerCase().trim();
   if (q.length < 2) return [];
 
-  // Dividir la búsqueda por términos/palabras para soportar búsquedas desordenadas
   const terms = q.split(/\s+/);
 
   return BASIC_FOODS.filter((food) => {
-    const foodName = food.name.toLowerCase();
-    // Todos los términos ingresados deben coincidir de alguna forma con el nombre del alimento
-    return terms.every((term) => foodName.includes(term));
+    // Quitar caracteres especiales y separar palabras
+    const foodWords = food.name
+      .toLowerCase()
+      .replace(/[(),/]/g, '')
+      .split(/\s+/);
+    
+    // Todos los términos ingresados deben coincidir con alguna palabra del alimento (con tolerancia)
+    return terms.every((term) => matchTerm(term, foodWords));
   });
 }
