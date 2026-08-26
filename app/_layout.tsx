@@ -22,9 +22,11 @@ export default function Layout() {
 
   useEffect(() => {
     if (!ready) return;
-    const inAuth = segments[0] === 'login';
+    const inAuth = segments[0] === 'login' || segments[0] === 'reset';
     if (!session && !inAuth) router.replace('/login');
-    if (session && inAuth) router.replace('/');
+    // De /reset no sacamos aunque ya haya sesión: la de recuperación existe
+    // justo para poder guardar la contraseña nueva.
+    if (session && segments[0] === 'login') router.replace('/');
   }, [session, ready, segments]);
 
   return (
@@ -40,6 +42,7 @@ export default function Layout() {
       >
         <Stack.Screen name="index" options={{ title: 'Hoy' }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
+        <Stack.Screen name="reset" options={{ headerShown: false }} />
         <Stack.Screen name="search" options={{ title: 'Buscar alimento' }} />
         <Stack.Screen name="scan" options={{ title: 'Escanear código' }} />
         <Stack.Screen name="photo" options={{ title: 'Foto del plato' }} />

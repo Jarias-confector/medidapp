@@ -39,17 +39,31 @@ billing en un proyecto borra su free tier de Gemini por completo.
 
 ## Login
 
-Correo y contraseña. A propósito no usa correos: el SMTP integrado de Supabase
-solo entrega a direcciones que estén en el equipo del proyecto, así que
-cualquier flujo por correo (enlace mágico, código, recuperar contraseña) no le
-sirve a un usuario real hasta que configures SMTP propio.
+Correo y contraseña. Entrar y crear cuenta no mandan ningún correo a propósito:
+el SMTP integrado de Supabase solo entrega a direcciones que estén en el equipo
+del proyecto, así que nada por correo le sirve a un usuario real todavía.
 
 En Authentication → Sign In / Providers, apaga **Confirm email**. Si lo dejas
 prendido, `signUp` no devuelve sesión y la app te pide confirmar el correo, que
-es justo lo que no podemos mandar todavía.
+es justo lo que no podemos mandar.
 
-Cuando pongas SMTP propio (Brevo, Resend, SES) puedes volver a prender la
-confirmación y agregar "olvidé mi contraseña" con `resetPasswordForEmail`.
+### Recuperar contraseña
+
+Está armada (`app/reset.tsx`) pero **duerme hasta que configures SMTP propio**,
+porque manda un enlace por correo y no hay forma de evitarlo. Mientras tanto, si
+alguien olvida su contraseña la cambias tú desde Authentication → Users.
+
+Para prenderla, cuando tengas SMTP (Brevo, Resend, SES):
+
+1. Authentication → Emails → SMTP Settings, con tus credenciales.
+2. Authentication → URL Configuration → Redirect URLs: agrega `macros://reset`
+   y, si pruebas en Expo Go, `exp://**`.
+3. Ya. El código no cambia.
+
+En Expo Go la url del deep link trae la IP de tu máquina y cambia sola; los docs
+de expo-linking dicen que ahí no es estable para callbacks de auth. Para probar
+esto en serio usa un development build (`npx expo run:android`), donde
+`macros://reset` es fijo.
 
 ## Reglas del código
 

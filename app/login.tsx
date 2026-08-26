@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
-import { signIn, signUp } from '../lib/auth';
+import { signIn, signUp, sendPasswordReset } from '../lib/auth';
 import { T } from '../lib/theme';
 
 const MIN_PASSWORD = 6;
@@ -32,6 +32,21 @@ export default function Login() {
       setMsg(e?.message ?? 'No se pudo continuar. Intenta de nuevo.');
       setBusy(false);
     }
+  }
+
+  async function forgot() {
+    if (!email.includes('@')) {
+      setMsg('Escribe tu correo primero.');
+      return;
+    }
+    setBusy(true); setMsg('');
+    try {
+      await sendPasswordReset(email);
+      setMsg('Si ese correo tiene cuenta, te llega un enlace para cambiar la contraseña.');
+    } catch (e: any) {
+      setMsg(e?.message ?? 'No se pudo mandar el correo. Intenta de nuevo.');
+    }
+    setBusy(false);
   }
 
   function swap() {
@@ -84,6 +99,12 @@ export default function Login() {
         </Text>
       </Pressable>
 
+      {mode === 'signin' && (
+        <Pressable onPress={forgot} disabled={busy} style={s.swap}>
+          <Text style={s.forgot}>Olvidé mi contraseña</Text>
+        </Pressable>
+      )}
+
       {!!msg && <Text style={s.msg}>{msg}</Text>}
       {mode === 'signup' && !msg && (
         <Text style={s.hint}>La contraseña necesita al menos {MIN_PASSWORD} caracteres.</Text>
@@ -105,6 +126,7 @@ const s = StyleSheet.create({
   btnText: { color: T.bg, fontWeight: '700', fontSize: 16 },
   swap: { alignItems: 'center', paddingVertical: 6 },
   link: { color: T.prot, fontSize: 13, fontWeight: '600' },
+  forgot: { color: T.dim, fontSize: 13 },
   msg: { color: T.dim, fontSize: 13, textAlign: 'center', marginTop: 4, lineHeight: 18 },
   hint: { color: T.dim, fontSize: 12, textAlign: 'center', marginTop: 4, opacity: 0.7 },
 });

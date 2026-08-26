@@ -49,6 +49,11 @@ create policy foods_read on foods for select
   using (owner_id is null or owner_id = auth.uid());
 create policy foods_write on foods for insert
   with check (owner_id is null or owner_id = auth.uid());
+-- cacheFood hace upsert: el on conflict do update necesita policy de update,
+-- no basta con la de insert.
+create policy foods_update on foods for update
+  using (owner_id is null or owner_id = auth.uid())
+  with check (owner_id is null or owner_id = auth.uid());
 
 create policy entries_own on entries for all
   using (user_id = auth.uid()) with check (user_id = auth.uid());
@@ -76,4 +81,7 @@ insert into foods (source, source_id, name, kcal, protein, carbs, fat, serving_g
   ('mx','tinga-pollo','Tinga de pollo',145,15.0,5.0,7.0,120),
   ('mx','salsa-verde','Salsa verde',36,1.2,6.0,0.8,30),
   ('mx','queso-fresco','Queso fresco',290,18.0,3.0,23.0,30),
-  ('mx','aguacate','Aguacate',160,2.0,8.5,14.7,50);
+  ('mx','aguacate','Aguacate',160,2.0,8.5,14.7,50),
+  ('mx','huevo-entero','Huevo entero',143,12.6,0.7,9.5,50),
+  ('mx','nopal-cocido','Nopal cocido',15,1.3,3.3,0.1,100),
+  ('mx','pechuga-pollo','Pechuga de pollo cocida',165,31.0,0.0,3.6,120);
