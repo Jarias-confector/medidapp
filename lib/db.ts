@@ -11,9 +11,8 @@ export const supabase = createClient(
       storage: AsyncStorage,
       persistSession: true,
       autoRefreshToken: true,
-      // En nativo no hay URL que leer: el deep link se procesa a mano en _layout.
+      // En nativo no hay URL que leer.
       detectSessionInUrl: false,
-      // PKCE devuelve ?code=... como query param, fácil de sacar del deep link.
       flowType: 'pkce',
     },
   }

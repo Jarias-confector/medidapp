@@ -39,22 +39,17 @@ billing en un proyecto borra su free tier de Gemini por completo.
 
 ## Login
 
-Código de 6 dígitos por correo. No usa deep links, así que no depende de la
-lista de redirect urls ni del navegador del cliente de correo.
+Correo y contraseña. A propósito no usa correos: el SMTP integrado de Supabase
+solo entrega a direcciones que estén en el equipo del proyecto, así que
+cualquier flujo por correo (enlace mágico, código, recuperar contraseña) no le
+sirve a un usuario real hasta que configures SMTP propio.
 
-En Authentication → Emails, la plantilla de **Magic Link** y la de **Confirm
-signup** tienen que incluir el token:
+En Authentication → Sign In / Providers, apaga **Confirm email**. Si lo dejas
+prendido, `signUp` no devuelve sesión y la app te pide confirmar el correo, que
+es justo lo que no podemos mandar todavía.
 
-```html
-<p>Tu código de acceso es:</p>
-<p><strong>{{ .Token }}</strong></p>
-```
-
-Las plantillas que trae Supabase de fábrica solo llevan `{{ .ConfirmationURL }}`.
-Si no agregas `{{ .Token }}`, el correo llega sin código.
-
-El enlace sigue funcionando como respaldo si lo abren en el mismo teléfono. Para
-eso el proyecto necesita `macros://login` y `exp://**` en los redirect urls.
+Cuando pongas SMTP propio (Brevo, Resend, SES) puedes volver a prender la
+confirmación y agregar "olvidé mi contraseña" con `resetPasswordForEmail`.
 
 ## Reglas del código
 

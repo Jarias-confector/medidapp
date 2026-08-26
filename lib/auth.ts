@@ -1,42 +1,32 @@
-// Login por enlace mágico en nativo. El correo debe regresar a la app,
-// no a localhost: Supabase usa el Site URL del proyecto si no le mandamos
-// emailRedirectTo, y ese default es http://localhost:3000.
-import * as Linking from 'expo-linking';
+// Login con correo y contraseña. Sin correos de por medio: el SMTP integrado
+// de Supabase solo entrega a direcciones del equipo del proyecto, así que
+// cualquier flujo por correo necesita SMTP propio antes de servir de algo.
 import { supabase } from './db';
 
-/**
- * URL a la que Supabase debe regresar tras abrir el enlace del correo.
- * En Expo Go sale exp://<ip>:8081/--/login; en build nativo, macros://login.
- * Ambas tienen que estar en la lista de redirect urls del proyecto.
- */
-export function authRedirectUrl(): string {
-  return Linking.createURL('/login');
-}
+export type SignUpResult =
+  | { status: 'ok' }                      // entró directo
+  | { status: 'needs_confirmation' };     // falta confirmar el correo
 
-/**
- * Manda el correo de acceso. Trae el código de 6 dígitos ({{ .Token }} en la
- * plantilla) y también el enlace, por si lo abren desde el mismo teléfono.
- */
-export async function sendLoginCode(email: string) {
-  const { error } = await supabase.auth.signInWithOtp({
+export async function signIn(email: string, password: string) {
+  const { error } = await supabase.auth.signInWithPassword({
     email: normalize(email),
-    options: { emailRedirectTo: authRedirectUrl() },
+    password,
   });
   if (error) throw new Error(describeAuthError(error.message));
 }
 
-/**
- * Canjea el código de 6 dígitos por una sesión. No pasa por el deep link ni
- * por la lista de redirect urls: pega directo a /verify.
- * El tipo 'email' cubre tanto el alta como el acceso de un usuario que ya existe.
- */
-export async function verifyLoginCode(email: string, code: string) {
-  const { error } = await supabase.auth.verifyOtp({
+export async function signUp(email: string, password: string): Promise<SignUpResult> {
+  const { data, error } = await supabase.auth.signUp({
     email: normalize(email),
-    token: code.trim(),
-    type: 'email',
+    password,
   });
   if (error) throw new Error(describeAuthError(error.message));
+  // Con "Confirm email" prendido, signUp no falla pero tampoco da sesión.
+  return data.session ? { status: 'ok' } : { status: 'needs_confirmation' };
+}
+
+export async function signOut() {
+  await supabase.auth.signOut();
 }
 
 function normalize(email: string): string {
@@ -45,68 +35,24 @@ function normalize(email: string): string {
 
 function describeAuthError(message: string): string {
   const m = message.toLowerCase();
-  if (m.includes('expired') || m.includes('invalid')) {
-    return 'El código no sirve o ya venció. Pide uno nuevo.';
+  if (m.includes('invalid login credentials')) return 'Correo o contraseña incorrectos.';
+  if (m.includes('already registered') || m.includes('already been registered')) {
+    return 'Ese correo ya tiene cuenta. Entra con tu contraseña.';
+  }
+  if (m.includes('email not confirmed')) {
+    return 'Falta confirmar tu correo antes de entrar.';
+  }
+  if (m.includes('password should be at least')) {
+    const n = m.match(/at least (\d+)/);
+    return `La contraseña necesita al menos ${n ? n[1] : 6} caracteres.`;
   }
   if (m.includes('rate limit') || m.includes('too many')) {
     return 'Demasiados intentos. Espera un minuto.';
   }
-  // "For security purposes, you can only request this after 51 seconds."
   const wait = m.match(/after (\d+) seconds?/);
-  if (wait) return `Espera ${wait[1]} segundos antes de pedir otro código.`;
+  if (wait) return `Espera ${wait[1]} segundos antes de intentar de nuevo.`;
+  if (m.includes('unable to validate email') || m.includes('invalid email')) {
+    return 'Ese correo no es válido.';
+  }
   return message;
-}
-
-export type SignInResult =
-  | { status: 'none' }            // la url no traía nada de auth
-  | { status: 'ok' }
-  | { status: 'error'; message: string };
-
-/**
- * Supabase regresa la sesión de dos formas según el flow del cliente que
- * pidió el enlace: pkce manda ?code=... en el query, e implicit manda
- * #access_token=...&refresh_token=... en el fragmento. Linking.parse solo
- * lee el query, así que aquí juntamos ambos a mano.
- */
-function authParams(url: string): URLSearchParams {
-  const merged = new URLSearchParams();
-  for (const part of url.split(/[?#]/).slice(1)) {
-    new URLSearchParams(part).forEach((v, k) => merged.set(k, v));
-  }
-  return merged;
-}
-
-/** Cambia el deep link del correo por una sesión. */
-export async function completeSignInFromUrl(url: string): Promise<SignInResult> {
-  const p = authParams(url);
-
-  const errorDescription = p.get('error_description') ?? p.get('error');
-  if (errorDescription) {
-    return { status: 'error', message: describe(p.get('error_code'), errorDescription) };
-  }
-
-  // Flow pkce.
-  const code = p.get('code');
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) return { status: 'error', message: 'El enlace ya no sirve. Pide uno nuevo.' };
-    return { status: 'ok' };
-  }
-
-  // Flow implicit.
-  const access_token = p.get('access_token');
-  const refresh_token = p.get('refresh_token');
-  if (access_token && refresh_token) {
-    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
-    if (error) return { status: 'error', message: 'El enlace ya no sirve. Pide uno nuevo.' };
-    return { status: 'ok' };
-  }
-
-  return { status: 'none' };
-}
-
-function describe(code: string | null, fallback: string): string {
-  if (code === 'otp_expired') return 'El enlace ya venció. Pide uno nuevo.';
-  if (code === 'access_denied') return 'El enlace ya se usó o venció. Pide uno nuevo.';
-  return fallback.replace(/\+/g, ' ');
 }
