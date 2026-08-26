@@ -24,30 +24,47 @@ export async function cacheFood(food: Food): Promise<Food> {
   let savedFood: Food | null = null;
   
   try {
-    const { data, error } = await supabase
+    // 1. Intentar buscar si ya existe para evitar upsert (evitando requerir política de UPDATE en RLS)
+    const { data: existing, error: selectErr } = await supabase
       .from('foods')
-      .upsert(
-        {
-          source: food.source,
-          source_id: food.source_id,
-          name: food.name,
-          brand: food.brand ?? null,
-          kcal: food.kcal,
-          protein: food.protein,
-          carbs: food.carbs,
-          fat: food.fat,
-          fiber: food.fiber ?? null,
-          serving_g: food.serving_g ?? 100,
-        },
-        { onConflict: 'source,source_id', ignoreDuplicates: false }
-      )
-      .select()
-      .single();
-      
-    if (error) throw error;
-    savedFood = data as Food;
+      .select('*')
+      .eq('source', food.source)
+      .eq('source_id', food.source_id)
+      .maybeSingle();
+
+    if (!selectErr && existing) {
+      savedFood = existing as Food;
+    } else {
+      // 2. Si no existe, hacer un INSERT simple (solo requiere política de INSERT)
+      const { data: { user } } = await supabase.auth.getUser();
+      const insertData: any = {
+        source: food.source,
+        source_id: food.source_id,
+        name: food.name,
+        brand: food.brand ?? null,
+        kcal: food.kcal,
+        protein: food.protein,
+        carbs: food.carbs,
+        fat: food.fat,
+        fiber: food.fiber ?? null,
+        serving_g: food.serving_g ?? 100,
+      };
+
+      if (food.source === 'custom' && user) {
+        insertData.owner_id = user.id;
+      }
+
+      const { data, error: insertErr } = await supabase
+        .from('foods')
+        .insert(insertData)
+        .select()
+        .single();
+        
+      if (insertErr) throw insertErr;
+      savedFood = data as Food;
+    }
   } catch (err) {
-    console.warn('Failed to upsert food to Supabase, saving locally:', err);
+    console.warn('Failed to insert food in Supabase, saving locally:', err);
     savedFood = {
       ...food,
       id: food.id || 'loc_' + Math.random().toString(36).substring(2, 11),
@@ -114,30 +131,49 @@ export async function searchCache(q: string): Promise<Food[]> {
 }
 
 export async function addEntry(foodId: string, grams: number, meal: Meal, eatenAt?: string) {
-  const { data: { user } } = await supabase.auth.getUser();
-  const record = {
-    user_id: user!.id,
-    food_id: foodId,
-    grams,
-    meal,
-    eaten_at: eatenAt || new Date().toISOString(),
-  };
-
+  const eatenAtStr = eatenAt || new Date().toISOString();
+  
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('No active user session');
+
+    const record = {
+      user_id: user.id,
+      food_id: foodId,
+      grams,
+      meal,
+      eaten_at: eatenAtStr,
+    };
+
     const { error } = await supabase.from('entries').insert(record);
     if (error) throw error;
 
-    const dateStr = record.eaten_at.slice(0, 10);
+    const dateStr = eatenAtStr.slice(0, 10);
     await AsyncStorage.removeItem(`entries:${dateStr}`);
   } catch (err) {
     console.warn('Failed to insert entry in Supabase, queuing offline:', err);
+    
+    let userId = 'offline_user';
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (data?.user) userId = data.user.id;
+    } catch {}
+
+    const record = {
+      user_id: userId,
+      food_id: foodId,
+      grams,
+      meal,
+      eaten_at: eatenAtStr,
+    };
+
     const queueStr = await AsyncStorage.getItem('offline_entries_queue');
     const queue = queueStr ? JSON.parse(queueStr) : [];
     queue.push(record);
     await AsyncStorage.setItem('offline_entries_queue', JSON.stringify(queue));
 
     // Guardar en caché del día para visualización optimista offline
-    const dateStr = record.eaten_at.slice(0, 10);
+    const dateStr = eatenAtStr.slice(0, 10);
     const cachedStr = await AsyncStorage.getItem(`entries:${dateStr}`);
     const cachedEntries: Entry[] = cachedStr ? JSON.parse(cachedStr) : [];
 
@@ -231,19 +267,30 @@ export async function getGoals(): Promise<Macros> {
 export async function saveGoals(goals: Macros) {
   const cacheKey = 'goals:current';
   await AsyncStorage.setItem(cacheKey, JSON.stringify(goals));
-  const { data: { user } } = await supabase.auth.getUser();
-  const { error } = await supabase.from('goals').upsert({
-    user_id: user!.id,
-    kcal: goals.kcal,
-    protein: goals.protein,
-    carbs: goals.carbs,
-    fat: goals.fat,
-  });
-  if (error) throw error;
+  
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('No active user session');
+
+    const { error } = await supabase.from('goals').upsert({
+      user_id: user.id,
+      kcal: goals.kcal,
+      protein: goals.protein,
+      carbs: goals.carbs,
+      fat: goals.fat,
+    });
+    if (error) throw error;
+  } catch (err) {
+    console.warn('saveGoals failed, saving pending offline goals:', err);
+    await AsyncStorage.setItem('offline_goals_pending', JSON.stringify(goals));
+  }
 }
 
 export async function syncOfflineQueue() {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    const activeUserId = user?.id;
+
     // 1. Sincronizar alimentos creados offline
     const foodsQueueStr = await AsyncStorage.getItem('offline_foods_queue');
     const idMapping: { [tempId: string]: string } = {};
@@ -255,23 +302,22 @@ export async function syncOfflineQueue() {
       for (let i = 0; i < foodsQueue.length; i++) {
         const food = foodsQueue[i];
         try {
+          // Intentar insertar de forma segura
           const { data, error } = await supabase
             .from('foods')
-            .upsert(
-              {
-                source: food.source,
-                source_id: food.source_id,
-                name: food.name,
-                brand: food.brand,
-                kcal: food.kcal,
-                protein: food.protein,
-                carbs: food.carbs,
-                fat: food.fat,
-                fiber: food.fiber,
-                serving_g: food.serving_g,
-              },
-              { onConflict: 'source,source_id', ignoreDuplicates: false }
-            )
+            .insert({
+              source: food.source,
+              source_id: food.source_id,
+              name: food.name,
+              brand: food.brand,
+              kcal: food.kcal,
+              protein: food.protein,
+              carbs: food.carbs,
+              fat: food.fat,
+              fiber: food.fiber,
+              serving_g: food.serving_g,
+              owner_id: activeUserId || null,
+            })
             .select()
             .single();
 
@@ -282,6 +328,20 @@ export async function syncOfflineQueue() {
             
             await AsyncStorage.setItem(`food:${realId}`, JSON.stringify(data));
             await AsyncStorage.removeItem(`food:${food.id}`);
+          } else if (error && error.code === '23505') {
+            // Duplicado en source,source_id: ya existe en Supabase. Intentamos obtener el ID real.
+            const { data: existing } = await supabase
+              .from('foods')
+              .select('id')
+              .eq('source', food.source)
+              .eq('source_id', food.source_id)
+              .maybeSingle();
+            
+            if (existing) {
+              successfulFoodIndexes.push(i);
+              idMapping[food.id!] = existing.id;
+              await AsyncStorage.removeItem(`food:${food.id}`);
+            }
           }
         } catch (err) {
           console.warn('Error syncing queued food:', err);
@@ -299,48 +359,72 @@ export async function syncOfflineQueue() {
 
     // 2. Sincronizar entradas registradas offline
     const queueStr = await AsyncStorage.getItem('offline_entries_queue');
-    if (!queueStr) return;
-    const queue = JSON.parse(queueStr);
-    if (queue.length === 0) return;
+    if (queueStr) {
+      const queue = JSON.parse(queueStr);
+      if (queue.length > 0) {
+        console.log(`Sincronizando ${queue.length} entradas registradas offline...`);
+        const successfulIndexes: number[] = [];
 
-    console.log(`Sincronizando ${queue.length} entradas registradas offline...`);
-    const successfulIndexes: number[] = [];
+        for (let i = 0; i < queue.length; i++) {
+          const record = queue[i];
+          let foodId = record.food_id;
+          if (idMapping[foodId]) {
+            foodId = idMapping[foodId];
+          }
 
-    for (let i = 0; i < queue.length; i++) {
-      const record = queue[i];
-      let foodId = record.food_id;
-      if (idMapping[foodId]) {
-        foodId = idMapping[foodId];
-      }
+          if (String(foodId).startsWith('loc_')) {
+            continue;
+          }
 
-      if (String(foodId).startsWith('loc_')) {
-        continue; // Omitir hasta que se sincronice el alimento correspondiente
-      }
+          const userId = (!record.user_id || record.user_id === 'offline_user') ? activeUserId : record.user_id;
+          if (!userId) continue;
 
-      try {
-        const { error } = await supabase.from('entries').insert({
-          user_id: record.user_id,
-          food_id: foodId,
-          grams: record.grams,
-          meal: record.meal,
-          eaten_at: record.eaten_at,
-        });
-        if (!error) {
-          successfulIndexes.push(i);
-          const dateStr = record.eaten_at.slice(0, 10);
-          await AsyncStorage.removeItem(`entries:${dateStr}`);
+          try {
+            const { error } = await supabase.from('entries').insert({
+              user_id: userId,
+              food_id: foodId,
+              grams: record.grams,
+              meal: record.meal,
+              eaten_at: record.eaten_at,
+            });
+            if (!error) {
+              successfulIndexes.push(i);
+              const dateStr = record.eaten_at.slice(0, 10);
+              await AsyncStorage.removeItem(`entries:${dateStr}`);
+            }
+          } catch (err) {
+            console.warn('Error syncing queued entry:', err);
+            break;
+          }
         }
-      } catch (err) {
-        console.warn('Error syncing queued entry:', err);
-        break;
+
+        const remainingQueue = queue.filter((_: any, idx: number) => !successfulIndexes.includes(idx));
+        if (remainingQueue.length > 0) {
+          await AsyncStorage.setItem('offline_entries_queue', JSON.stringify(remainingQueue));
+        } else {
+          await AsyncStorage.removeItem('offline_entries_queue');
+        }
       }
     }
 
-    const remainingQueue = queue.filter((_: any, idx: number) => !successfulIndexes.includes(idx));
-    if (remainingQueue.length > 0) {
-      await AsyncStorage.setItem('offline_entries_queue', JSON.stringify(remainingQueue));
-    } else {
-      await AsyncStorage.removeItem('offline_entries_queue');
+    // 3. Sincronizar metas pendientes creadas offline
+    const pendingGoalsStr = await AsyncStorage.getItem('offline_goals_pending');
+    if (pendingGoalsStr && activeUserId) {
+      const pendingGoals = JSON.parse(pendingGoalsStr);
+      try {
+        const { error } = await supabase.from('goals').upsert({
+          user_id: activeUserId,
+          kcal: pendingGoals.kcal,
+          protein: pendingGoals.protein,
+          carbs: pendingGoals.carbs,
+          fat: pendingGoals.fat,
+        });
+        if (!error) {
+          await AsyncStorage.removeItem('offline_goals_pending');
+        }
+      } catch (err) {
+        console.warn('Error syncing queued goals:', err);
+      }
     }
   } catch (err) {
     console.error('Error syncing queue:', err);
