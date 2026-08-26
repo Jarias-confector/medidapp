@@ -28,7 +28,7 @@ export default function Search() {
         const geminiKey = process.env.EXPO_PUBLIC_GEMINI_KEY;
         if (geminiKey) {
           try {
-            const MODEL = 'gemini-1.5-flash';
+            const MODEL = 'gemini-3.6-flash';
             const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${geminiKey}`;
             const PROMPT = `Corrige la ortografía o deduce el alimento en español a partir de esta búsqueda con errores. Responde únicamente con el alimento corregido (máximo 3 palabras), sin explicaciones, sin markdown, en minúsculas. Ejemplo: 'huevi' -> 'huevo', 'avenaa' -> 'avena'. Consulta: '${queryToSearch}'`;
             

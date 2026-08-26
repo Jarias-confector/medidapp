@@ -51,7 +51,7 @@ export default function Photo() {
       const geminiKey = process.env.EXPO_PUBLIC_GEMINI_KEY;
       if (geminiKey) {
         try {
-          const MODEL = 'gemini-1.5-flash';
+          const MODEL = 'gemini-3.6-flash';
           const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${geminiKey}`;
           const PROMPT = `Eres un analista de nutrición. Identifica los alimentos visibles en la foto.
 Estima el peso en gramos de cada uno usando referencias visuales (plato ~26cm, cubiertos, mano).
