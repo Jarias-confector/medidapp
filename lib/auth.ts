@@ -13,12 +13,48 @@ export function authRedirectUrl(): string {
   return Linking.createURL('/login');
 }
 
-export async function sendMagicLink(email: string) {
+/**
+ * Manda el correo de acceso. Trae el código de 6 dígitos ({{ .Token }} en la
+ * plantilla) y también el enlace, por si lo abren desde el mismo teléfono.
+ */
+export async function sendLoginCode(email: string) {
   const { error } = await supabase.auth.signInWithOtp({
-    email: email.trim(),
+    email: normalize(email),
     options: { emailRedirectTo: authRedirectUrl() },
   });
-  if (error) throw error;
+  if (error) throw new Error(describeAuthError(error.message));
+}
+
+/**
+ * Canjea el código de 6 dígitos por una sesión. No pasa por el deep link ni
+ * por la lista de redirect urls: pega directo a /verify.
+ * El tipo 'email' cubre tanto el alta como el acceso de un usuario que ya existe.
+ */
+export async function verifyLoginCode(email: string, code: string) {
+  const { error } = await supabase.auth.verifyOtp({
+    email: normalize(email),
+    token: code.trim(),
+    type: 'email',
+  });
+  if (error) throw new Error(describeAuthError(error.message));
+}
+
+function normalize(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function describeAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('expired') || m.includes('invalid')) {
+    return 'El código no sirve o ya venció. Pide uno nuevo.';
+  }
+  if (m.includes('rate limit') || m.includes('too many')) {
+    return 'Demasiados intentos. Espera un minuto.';
+  }
+  // "For security purposes, you can only request this after 51 seconds."
+  const wait = m.match(/after (\d+) seconds?/);
+  if (wait) return `Espera ${wait[1]} segundos antes de pedir otro código.`;
+  return message;
 }
 
 export type SignInResult =

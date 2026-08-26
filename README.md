@@ -37,6 +37,25 @@ supabase secrets set GEMINI_KEY=tu_key USDA_KEY=tu_key
 **Importante:** usa un proyecto de Google Cloud aparte para producción. Activar
 billing en un proyecto borra su free tier de Gemini por completo.
 
+## Login
+
+Código de 6 dígitos por correo. No usa deep links, así que no depende de la
+lista de redirect urls ni del navegador del cliente de correo.
+
+En Authentication → Emails, la plantilla de **Magic Link** y la de **Confirm
+signup** tienen que incluir el token:
+
+```html
+<p>Tu código de acceso es:</p>
+<p><strong>{{ .Token }}</strong></p>
+```
+
+Las plantillas que trae Supabase de fábrica solo llevan `{{ .ConfirmationURL }}`.
+Si no agregas `{{ .Token }}`, el correo llega sin código.
+
+El enlace sigue funcionando como respaldo si lo abren en el mismo teléfono. Para
+eso el proyecto necesita `macros://login` y `exp://**` en los redirect urls.
+
 ## Reglas del código
 
 - Todos los macros se guardan **por 100 g**. El escalado se hace al mostrar.
