@@ -7,7 +7,7 @@ import { supabase } from './db';
 /**
  * URL a la que Supabase debe regresar tras abrir el enlace del correo.
  * En Expo Go sale exp://<ip>:8081/--/login; en build nativo, macros://login.
- * Ambas tienen que estar en la lista de redirect URLs del proyecto.
+ * Ambas tienen que estar en la lista de redirect urls del proyecto.
  */
 export function authRedirectUrl(): string {
   return Linking.createURL('/login');
@@ -21,20 +21,56 @@ export async function sendMagicLink(email: string) {
   if (error) throw error;
 }
 
+export type SignInResult =
+  | { status: 'none' }            // la url no traía nada de auth
+  | { status: 'ok' }
+  | { status: 'error'; message: string };
+
 /**
- * Cambia el ?code=... del deep link por una sesión. Devuelve el mensaje de
- * error en español, o null si entró bien o si la URL no traía nada de auth.
+ * Supabase regresa la sesión de dos formas según el flow del cliente que
+ * pidió el enlace: pkce manda ?code=... en el query, e implicit manda
+ * #access_token=...&refresh_token=... en el fragmento. Linking.parse solo
+ * lee el query, así que aquí juntamos ambos a mano.
  */
-export async function completeSignInFromUrl(url: string): Promise<string | null> {
-  const { queryParams } = Linking.parse(url);
+function authParams(url: string): URLSearchParams {
+  const merged = new URLSearchParams();
+  for (const part of url.split(/[?#]/).slice(1)) {
+    new URLSearchParams(part).forEach((v, k) => merged.set(k, v));
+  }
+  return merged;
+}
 
-  const errorDescription = queryParams?.error_description;
-  if (typeof errorDescription === 'string') return errorDescription;
+/** Cambia el deep link del correo por una sesión. */
+export async function completeSignInFromUrl(url: string): Promise<SignInResult> {
+  const p = authParams(url);
 
-  const code = queryParams?.code;
-  if (typeof code !== 'string') return null;
+  const errorDescription = p.get('error_description') ?? p.get('error');
+  if (errorDescription) {
+    return { status: 'error', message: describe(p.get('error_code'), errorDescription) };
+  }
 
-  const { error } = await supabase.auth.exchangeCodeForSession(code);
-  if (error) return 'El enlace ya no sirve. Pide uno nuevo.';
-  return null;
+  // Flow pkce.
+  const code = p.get('code');
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) return { status: 'error', message: 'El enlace ya no sirve. Pide uno nuevo.' };
+    return { status: 'ok' };
+  }
+
+  // Flow implicit.
+  const access_token = p.get('access_token');
+  const refresh_token = p.get('refresh_token');
+  if (access_token && refresh_token) {
+    const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+    if (error) return { status: 'error', message: 'El enlace ya no sirve. Pide uno nuevo.' };
+    return { status: 'ok' };
+  }
+
+  return { status: 'none' };
+}
+
+function describe(code: string | null, fallback: string): string {
+  if (code === 'otp_expired') return 'El enlace ya venció. Pide uno nuevo.';
+  if (code === 'access_denied') return 'El enlace ya se usó o venció. Pide uno nuevo.';
+  return fallback.replace(/\+/g, ' ');
 }

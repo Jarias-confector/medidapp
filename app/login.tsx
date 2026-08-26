@@ -11,13 +11,16 @@ export default function Login() {
   const url = Linking.useURL();
   const handled = useRef<string | null>(null);
 
-  // El enlace del correo regresa a esta pantalla con ?code=...
+  // El enlace del correo regresa a esta pantalla con el code o los tokens.
   useEffect(() => {
     if (!url || handled.current === url) return;
     handled.current = url;
     setBusy(true);
     completeSignInFromUrl(url)
-      .then((err) => { if (err) setMsg(err); })
+      .then((res) => {
+        if (res.status === 'error') setMsg(res.message);
+        // 'none' es normal: la app tambien se abre por deep links sin auth.
+      })
       .finally(() => setBusy(false));
   }, [url]);
 
