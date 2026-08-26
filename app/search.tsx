@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { searchCache, cacheFood } from '../lib/db';
 import { searchUSDA } from '../lib/usda';
 import { searchOFF } from '../lib/off';
+import { searchBasics } from '../lib/basics';
 import type { Food } from '../lib/types';
 import { T } from '../lib/theme';
 
@@ -19,11 +20,25 @@ export default function Search() {
     if (q.trim().length < 2) return;
     setBusy(true); setErr('');
     try {
-      // 1. cache local (gratis, instantáneo)
+      // 1. Alimentos básicos locales (instantáneos y sin key)
+      const basics = searchBasics(q);
+
+      // 2. cache local (gratis, instantáneo)
       const local = await searchCache(q);
-      setResults(local);
+
+      // Combinar básicos y locales únicos
+      const initialResults = [...basics];
+      const seen = new Set(basics.map((f) => `${f.source}:${f.source_id}`));
+      for (const f of local) {
+        const key = `${f.source}:${f.source_id}`;
+        if (!seen.has(key)) {
+          initialResults.push(f);
+          seen.add(key);
+        }
+      }
+      setResults(initialResults);
       
-      // 2. pegamos a las APIs externas
+      // 3. pegamos a las APIs externas
       let remote: Food[] = [];
       
       try {
@@ -40,7 +55,6 @@ export default function Search() {
         console.warn('OFF search error:', e);
       }
 
-      const seen = new Set(local.map((f) => `${f.source}:${f.source_id}`));
       const uniqueRemote = remote.filter((f) => {
         const key = `${f.source}:${f.source_id}`;
         if (seen.has(key)) return false;
@@ -48,7 +62,7 @@ export default function Search() {
         return true;
       });
 
-      setResults([...local, ...uniqueRemote]);
+      setResults([...initialResults, ...uniqueRemote]);
     } catch {
       setErr('No se pudo buscar en línea. Se muestran solo resultados guardados.');
     }

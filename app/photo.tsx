@@ -46,6 +46,52 @@ export default function Photo() {
       errorMsg = e.message || String(e);
     }
 
+    // Si falló el Edge Function, intentamos llamada directa desde el cliente si tenemos la key
+    if (errorMsg || data?.error || !data?.items) {
+      const geminiKey = process.env.EXPO_PUBLIC_GEMINI_KEY;
+      if (geminiKey) {
+        try {
+          const MODEL = 'gemini-1.5-flash';
+          const ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${geminiKey}`;
+          const PROMPT = `Eres un analista de nutrición. Identifica los alimentos visibles en la foto.
+Estima el peso en gramos de cada uno usando referencias visuales (plato ~26cm, cubiertos, mano).
+Responde SOLO con un array JSON, sin markdown, sin texto extra:
+[{"nombre":"pechuga de pollo a la plancha","gramos":150,"confianza":0.8}]
+Reglas:
+- nombre en español, específico, incluye método de cocción.
+- separa cada componente del plato, no agrupes.
+- confianza entre 0 y 1.
+- si no distingues comida, responde [].`;
+
+          const res = await fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: PROMPT },
+                  { inlineData: { mimeType: 'image/jpeg', data: small.base64 } },
+                ],
+              }],
+              generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+            }),
+          });
+
+          if (res.ok) {
+            const resJson = await res.json();
+            const raw = resJson.candidates?.[0]?.content?.parts?.[0]?.text ?? '[]';
+            const items = JSON.parse(raw.replace(/```json|```/g, '').trim());
+            data = { items };
+            errorMsg = null;
+          } else {
+            errorMsg = `Gemini API HTTP ${res.status}`;
+          }
+        } catch (clientErr: any) {
+          errorMsg = clientErr.message || String(clientErr);
+        }
+      }
+    }
+
     setBusy(false);
     if (errorMsg || data?.error) { setMsg(data?.error ?? errorMsg ?? 'Falló el análisis. Intenta de nuevo.'); return; }
     if (!data || !data.items?.length) { setMsg('No se reconoció comida en la foto. Registra manualmente.'); return; }
