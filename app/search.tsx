@@ -71,13 +71,30 @@ export default function Search() {
         returnKeyType="search"
         autoFocus
       />
+      
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+        {!!err ? <Text style={s.err}>{err}</Text> : <View />}
+        <Pressable onPress={() => router.push('/custom')}>
+          <Text style={{ color: T.prot, fontWeight: '600', fontSize: 14 }}>✍️ Crear personalizado</Text>
+        </Pressable>
+      </View>
+
       {busy && <ActivityIndicator color={T.prot} style={{ marginTop: 20 }} />}
-      {!!err && <Text style={s.err}>{err}</Text>}
 
       <FlatList
         data={results}
         keyExtractor={(f, i) => `${f.source}:${f.source_id}:${i}`}
         keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          !busy && q.trim().length >= 2 ? (
+            <View style={{ alignItems: 'center', marginTop: 40, gap: 12 }}>
+              <Text style={{ color: T.dim, fontSize: 14, textAlign: 'center' }}>¿No encuentras el alimento en las bases de datos?</Text>
+              <Pressable style={s.createBtn} onPress={() => router.push('/custom')}>
+                <Text style={{ color: T.bg, fontWeight: '700', fontSize: 14 }}>Crear alimento personalizado</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
         renderItem={({ item }) => (
           <Pressable style={s.row} onPress={() => choose(item)}>
             <View style={{ flex: 1 }}>
@@ -101,7 +118,7 @@ const s = StyleSheet.create({
     backgroundColor: T.surface, borderRadius: T.r, padding: 15, color: T.text,
     fontSize: 16, borderWidth: 1, borderColor: T.line,
   },
-  err: { color: T.carb, fontSize: 12, marginTop: 10 },
+  err: { color: T.carb, fontSize: 12, flex: 1 },
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: T.line,
@@ -109,4 +126,5 @@ const s = StyleSheet.create({
   name: { color: T.text, fontSize: 15, fontWeight: '600' },
   meta: { color: T.dim, fontSize: 12, marginTop: 3 },
   tag: { color: T.dim, fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 },
+  createBtn: { backgroundColor: T.prot, borderRadius: T.r, paddingVertical: 12, paddingHorizontal: 20, alignItems: 'center' },
 });
