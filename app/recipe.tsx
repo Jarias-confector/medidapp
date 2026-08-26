@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { cacheFood, searchCache } from '../lib/db';
 import { searchUSDA } from '../lib/usda';
 import { searchOFF } from '../lib/off';
+import { searchBasics } from '../lib/basics';
 import type { Food } from '../lib/types';
 import { T } from '../lib/theme';
 
@@ -37,9 +38,25 @@ export default function Recipe() {
     if (q.trim().length < 2) return;
     setBusySearch(true);
     try {
-      const local = await searchCache(q);
-      setResults(local);
+      // 1. Alimentos básicos locales primero
+      const basics = searchBasics(q);
 
+      // 2. Cache local de Supabase
+      const local = await searchCache(q);
+
+      // Combinar únicos
+      const initialResults = [...basics];
+      const seen = new Set(basics.map((f) => `${f.source}:${f.source_id}`));
+      for (const f of local) {
+        const key = `${f.source}:${f.source_id}`;
+        if (!seen.has(key)) {
+          initialResults.push(f);
+          seen.add(key);
+        }
+      }
+      setResults(initialResults);
+
+      // 3. Pegar a las APIs externas
       let remote: Food[] = [];
       try {
         const usdaRes = await searchUSDA(q);
@@ -50,9 +67,14 @@ export default function Recipe() {
         remote = [...remote, ...offRes];
       } catch {}
 
-      const seen = new Set(local.map((f) => `${f.source}:${f.source_id}`));
-      const uniqueRemote = remote.filter((f) => !seen.has(`${f.source}:${f.source_id}`));
-      setResults([...local, ...uniqueRemote]);
+      const uniqueRemote = remote.filter((f) => {
+        const key = `${f.source}:${f.source_id}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+
+      setResults([...initialResults, ...uniqueRemote]);
     } catch {
       setMsg('Error buscando alimentos en línea.');
     } finally {
