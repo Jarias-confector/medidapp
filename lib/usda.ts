@@ -42,7 +42,7 @@ export async function searchUSDA(query: string): Promise<Food[]> {
 
   // Fallback: si falla o si el error indica que falta la llave en el servidor
   if (errorMsg || data?.error) {
-    const localKey = process.env.EXPO_PUBLIC_USDA_KEY;
+    const localKey = process.env.EXPO_PUBLIC_USDA_KEY?.trim();
     const activeKey = (!localKey || localKey === 'PON_TU_KEY_DE_api.data.gov') ? 'DEMO_KEY' : localKey;
     try {
       const ENDPOINT = 'https://api.nal.usda.gov/fdc/v1/foods/search';
@@ -67,7 +67,8 @@ export async function searchUSDA(query: string): Promise<Food[]> {
   }
 
   if (errorMsg || data?.error) {
-    throw new Error(data?.error ?? errorMsg ?? 'No se pudo buscar en USDA.');
+    console.warn('USDA search failed:', data?.error ?? errorMsg);
+    return [];
   }
 
   return ((data?.foods ?? []) as any[])
