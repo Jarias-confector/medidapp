@@ -25,12 +25,51 @@ async function messageFrom(error: any): Promise<string> {
 }
 
 export async function searchUSDA(query: string): Promise<Food[]> {
-  const { data, error } = await supabase.functions.invoke('search-food', {
-    body: { q: query },
-  });
+  let data: any = null;
+  let errorMsg: string | null = null;
 
-  if (error) throw new Error(await messageFrom(error));
-  if (data?.error) throw new Error(String(data.error));
+  try {
+    const response = await supabase.functions.invoke('search-food', {
+      body: { q: query },
+    });
+    data = response.data;
+    if (response.error) {
+      errorMsg = String(response.error);
+    }
+  } catch (e: any) {
+    errorMsg = e.message || String(e);
+  }
+
+  // Fallback: si falla o si el error indica que falta la llave en el servidor
+  if (errorMsg || data?.error) {
+    const localKey = process.env.EXPO_PUBLIC_USDA_KEY;
+    if (localKey && localKey !== 'PON_TU_KEY_DE_api.data.gov') {
+      try {
+        const ENDPOINT = 'https://api.nal.usda.gov/fdc/v1/foods/search';
+        const DATA_TYPES = 'Foundation,SR Legacy,Survey (FNDDS)';
+        const PAGE_SIZE = 20;
+        const url =
+          `${ENDPOINT}?api_key=${encodeURIComponent(localKey)}` +
+          `&query=${encodeURIComponent(query.trim())}` +
+          `&dataType=${encodeURIComponent(DATA_TYPES)}` +
+          `&pageSize=${PAGE_SIZE}`;
+
+        const res = await fetch(url);
+        if (res.ok) {
+          data = await res.json();
+          errorMsg = null;
+        } else {
+          errorMsg = `USDA API HTTP ${res.status}`;
+        }
+      } catch (clientErr: any) {
+        errorMsg = clientErr.message || String(clientErr);
+      }
+    }
+  }
+
+  if (errorMsg || data?.error) {
+    throw new Error(data?.error ?? errorMsg ?? 'No se pudo buscar en USDA.');
+  }
 
   return ((data?.foods ?? []) as any[])
     .map((f: any) => ({
