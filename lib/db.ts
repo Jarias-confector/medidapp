@@ -21,40 +21,96 @@ export const supabase = createClient(
 
 /** Guarda un Food externo en cache y devuelve el row con id. Idempotente. */
 export async function cacheFood(food: Food): Promise<Food> {
-  const { data, error } = await supabase
-    .from('foods')
-    .upsert(
-      {
-        source: food.source,
-        source_id: food.source_id,
-        name: food.name,
-        brand: food.brand ?? null,
-        kcal: food.kcal,
-        protein: food.protein,
-        carbs: food.carbs,
-        fat: food.fat,
-        fiber: food.fiber ?? null,
-        serving_g: food.serving_g ?? 100,
-      },
-      { onConflict: 'source,source_id', ignoreDuplicates: false }
-    )
-    .select()
-    .single();
-  if (error) throw error;
+  let savedFood: Food | null = null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('foods')
+      .upsert(
+        {
+          source: food.source,
+          source_id: food.source_id,
+          name: food.name,
+          brand: food.brand ?? null,
+          kcal: food.kcal,
+          protein: food.protein,
+          carbs: food.carbs,
+          fat: food.fat,
+          fiber: food.fiber ?? null,
+          serving_g: food.serving_g ?? 100,
+        },
+        { onConflict: 'source,source_id', ignoreDuplicates: false }
+      )
+      .select()
+      .single();
+      
+    if (error) throw error;
+    savedFood = data as Food;
+  } catch (err) {
+    console.warn('Failed to upsert food to Supabase, saving locally:', err);
+    savedFood = {
+      ...food,
+      id: food.id || 'loc_' + Math.random().toString(36).substring(2, 11),
+      brand: food.brand ?? 'Receta casera (Local)',
+    };
+    
+    const queueStr = await AsyncStorage.getItem('offline_foods_queue');
+    const queue = queueStr ? JSON.parse(queueStr) : [];
+    queue.push(savedFood);
+    await AsyncStorage.setItem('offline_foods_queue', JSON.stringify(queue));
+  }
 
-  const savedFood = data as Food;
   await AsyncStorage.setItem(`food:${savedFood.id}`, JSON.stringify(savedFood));
+
+  const customStr = await AsyncStorage.getItem('custom_foods_list');
+  const customList: Food[] = customStr ? JSON.parse(customStr) : [];
+  const exists = customList.some((f) => f.source === savedFood!.source && f.source_id === savedFood!.source_id);
+  if (!exists) {
+    customList.push(savedFood);
+    await AsyncStorage.setItem('custom_foods_list', JSON.stringify(customList));
+  }
+
   return savedFood;
 }
 
 /** Busca primero en cache local. Solo pega a USDA si hay pocos resultados. */
 export async function searchCache(q: string): Promise<Food[]> {
-  const { data } = await supabase
-    .from('foods')
-    .select('*')
-    .ilike('name', `%${q}%`)
-    .limit(20);
-  return (data ?? []) as Food[];
+  const query = q.toLowerCase().trim();
+  let dbResults: Food[] = [];
+  
+  try {
+    const { data } = await supabase
+      .from('foods')
+      .select('*')
+      .ilike('name', `%${q}%`)
+      .limit(20);
+    dbResults = (data ?? []) as Food[];
+  } catch (err) {
+    console.warn('searchCache remote failed:', err);
+  }
+
+  let localCustoms: Food[] = [];
+  try {
+    const customStr = await AsyncStorage.getItem('custom_foods_list');
+    if (customStr) {
+      const allCustoms: Food[] = JSON.parse(customStr);
+      localCustoms = allCustoms.filter((f) => f.name.toLowerCase().includes(query));
+    }
+  } catch (err) {
+    console.warn('Failed to load custom foods from AsyncStorage:', err);
+  }
+
+  const merged = [...dbResults];
+  const seenIds = new Set(dbResults.map((f) => f.id || `${f.source}:${f.source_id}`));
+  for (const f of localCustoms) {
+    const key = f.id || `${f.source}:${f.source_id}`;
+    if (!seenIds.has(key)) {
+      merged.push(f);
+      seenIds.add(key);
+    }
+  }
+
+  return merged;
 }
 
 export async function addEntry(foodId: string, grams: number, meal: Meal, eatenAt?: string) {
@@ -188,6 +244,60 @@ export async function saveGoals(goals: Macros) {
 
 export async function syncOfflineQueue() {
   try {
+    // 1. Sincronizar alimentos creados offline
+    const foodsQueueStr = await AsyncStorage.getItem('offline_foods_queue');
+    const idMapping: { [tempId: string]: string } = {};
+
+    if (foodsQueueStr) {
+      const foodsQueue: Food[] = JSON.parse(foodsQueueStr);
+      const successfulFoodIndexes: number[] = [];
+
+      for (let i = 0; i < foodsQueue.length; i++) {
+        const food = foodsQueue[i];
+        try {
+          const { data, error } = await supabase
+            .from('foods')
+            .upsert(
+              {
+                source: food.source,
+                source_id: food.source_id,
+                name: food.name,
+                brand: food.brand,
+                kcal: food.kcal,
+                protein: food.protein,
+                carbs: food.carbs,
+                fat: food.fat,
+                fiber: food.fiber,
+                serving_g: food.serving_g,
+              },
+              { onConflict: 'source,source_id', ignoreDuplicates: false }
+            )
+            .select()
+            .single();
+
+          if (!error && data) {
+            successfulFoodIndexes.push(i);
+            const realId = data.id;
+            idMapping[food.id!] = realId;
+            
+            await AsyncStorage.setItem(`food:${realId}`, JSON.stringify(data));
+            await AsyncStorage.removeItem(`food:${food.id}`);
+          }
+        } catch (err) {
+          console.warn('Error syncing queued food:', err);
+          break;
+        }
+      }
+
+      const remainingFoodsQueue = foodsQueue.filter((_: any, idx: number) => !successfulFoodIndexes.includes(idx));
+      if (remainingFoodsQueue.length > 0) {
+        await AsyncStorage.setItem('offline_foods_queue', JSON.stringify(remainingFoodsQueue));
+      } else {
+        await AsyncStorage.removeItem('offline_foods_queue');
+      }
+    }
+
+    // 2. Sincronizar entradas registradas offline
     const queueStr = await AsyncStorage.getItem('offline_entries_queue');
     if (!queueStr) return;
     const queue = JSON.parse(queueStr);
@@ -198,10 +308,19 @@ export async function syncOfflineQueue() {
 
     for (let i = 0; i < queue.length; i++) {
       const record = queue[i];
+      let foodId = record.food_id;
+      if (idMapping[foodId]) {
+        foodId = idMapping[foodId];
+      }
+
+      if (String(foodId).startsWith('loc_')) {
+        continue; // Omitir hasta que se sincronice el alimento correspondiente
+      }
+
       try {
         const { error } = await supabase.from('entries').insert({
           user_id: record.user_id,
-          food_id: record.food_id,
+          food_id: foodId,
           grams: record.grams,
           meal: record.meal,
           eaten_at: record.eaten_at,
